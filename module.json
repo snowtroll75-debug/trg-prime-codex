@@ -1,0 +1,74 @@
+{
+  "id": "trg-prime-codex",
+  "title": "TRG Prime Codex",
+  "description": "GM creature construction and deterministic Development Point ledgers for TRG Prime. 0.2.2: an ability a creature’s own type grants is priced by the type ledger. 0.2.1: Graham’s rulings of 18 Nov 2026 (Tiny and Diminutive reach 0, as in core; Ooze type immune to disease and precision). 0.2.0: start a builder variant from any published Fiends & Fables creature (the compendium creature is never changed); provisional ledgers for imported creatures.",
+  "version": "0.2.2",
+  "authors": [
+    {
+      "name": "Traris Games"
+    }
+  ],
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14.367",
+    "maximum": "14"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "trg-prime",
+        "type": "system",
+        "compatibility": {
+          "minimum": "3.685.2",
+          "verified": "3.699.0"
+        }
+      }
+    ],
+    "recommends": [
+      {
+        "id": "fiends-and-fables-prime",
+        "type": "module",
+        "reason": "Optional: published creatures to start Codex variants from."
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/codex.mjs"
+  ],
+  "styles": [
+    "styles/codex.css"
+  ],
+  "packs": [
+    {
+      "name": "creature-types",
+      "label": "Codex Creature Types",
+      "path": "packs/creature-types",
+      "type": "Item",
+      "system": "trg-prime"
+    },
+    {
+      "name": "creature-classes",
+      "label": "Codex Creature and NPC Classes",
+      "path": "packs/creature-classes",
+      "type": "Item",
+      "system": "trg-prime"
+    },
+    {
+      "name": "creature-attacks",
+      "label": "Codex Natural Attacks",
+      "path": "packs/creature-attacks",
+      "type": "Item",
+      "system": "trg-prime"
+    },
+    {
+      "name": "creature-abilities",
+      "label": "Codex Creature Abilities",
+      "path": "packs/creature-abilities",
+      "type": "Item",
+      "system": "trg-prime"
+    }
+  ],
+  "url": "https://github.com/snowtroll75-debug/trg-prime-codex",
+  "manifest": "https://raw.githubusercontent.com/snowtroll75-debug/trg-prime-codex/main/module.json",
+  "download": "https://github.com/snowtroll75-debug/trg-prime-codex/releases/download/v0.2.2/trg-prime-codex.zip"
+}

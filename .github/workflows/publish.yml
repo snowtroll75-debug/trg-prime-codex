@@ -1,0 +1,123 @@
+name: Publish TRG Prime Codex module
+
+on:
+  push:
+    paths:
+      - "incoming/*.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-trg-prime-codex
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select uploaded module
+        id: input
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(incoming/*.zip)
+          if (( ${#files[@]} == 0 )); then
+            echo "Upload a module ZIP under incoming/" >&2
+            exit 1
+          fi
+          selected=$(printf '%s\n' "${files[@]}" | sort -V | tail -n 1)
+          echo "path=$selected" >> "$GITHUB_OUTPUT"
+
+      - name: Validate module and build release
+        id: build
+        env:
+          SOURCE_ZIP: ${{ steps.input.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, re, shutil, zipfile
+          source=pathlib.Path(os.environ["SOURCE_ZIP"])
+          stage=pathlib.Path("build")
+          stage.mkdir(exist_ok=True)
+          with zipfile.ZipFile(source) as archive:
+              original_names=archive.namelist()
+              for name in original_names:
+                  path=pathlib.PurePosixPath(name)
+                  if path.is_absolute() or ".." in path.parts or "\\" in name:
+                      raise SystemExit(f"Unsafe archive entry: {name}")
+              prefix=""
+              if "module.json" not in original_names:
+                  candidates=[n for n in original_names if n.endswith("/module.json") and n.count("/")==1]
+                  if len(candidates)!=1:
+                      raise SystemExit("Module ZIP must have module.json at root or inside a single top-level module folder")
+                  prefix=candidates[0][:-len("module.json")]
+                  if any(not n.startswith(prefix) for n in original_names):
+                      raise SystemExit("Mixed root entries outside the module folder")
+              entries=[(n,n[len(prefix):]) for n in original_names if n.startswith(prefix)]
+              names=[relative for _,relative in entries]
+              manifest=json.loads(archive.read(prefix+"module.json"))
+              if manifest.get("id") != "trg-prime-codex":
+                  raise SystemExit("Wrong module ID (expected trg-prime-codex)")
+              version=manifest.get("version","")
+              if not re.fullmatch(r"\d+\.\d+\.\d+",version):
+                  raise SystemExit("Module version must be X.Y.Z")
+              packs=manifest.get("packs",[])
+              if len(packs) != 4:
+                  raise SystemExit(f"Expected four compendium packs; found {len(packs)}")
+              for pack in packs:
+                  path=pack["path"].rstrip("/")+"/"
+                  if not any(n.startswith(path) for n in names):
+                      raise SystemExit(f"Missing compendium pack: {path}")
+              repo="https://github.com/snowtroll75-debug/trg-prime-codex"
+              manifest["url"]=repo
+              manifest["manifest"]="https://raw.githubusercontent.com/snowtroll75-debug/trg-prime-codex/main/module.json"
+              manifest["download"]=f"{repo}/releases/download/v{version}/trg-prime-codex.zip"
+              for original,name in entries:
+                  if not name or name.endswith("/") or name=="module.json": continue
+                  target=stage / name
+                  target.parent.mkdir(parents=True,exist_ok=True)
+                  with archive.open(original) as inp, target.open("wb") as out:
+                      shutil.copyfileobj(inp,out)
+              new_manifest=json.dumps(manifest,indent=2,ensure_ascii=False)+"\n"
+              (stage/"module.json").write_text(new_manifest,encoding="utf-8")
+              pathlib.Path("module.json").write_text(new_manifest,encoding="utf-8")
+              with zipfile.ZipFile("trg-prime-codex.zip","w",zipfile.ZIP_DEFLATED) as out:
+                  for f in sorted(stage.rglob("*")):
+                      if f.is_file():
+                          out.write(f,f.relative_to(stage).as_posix())
+              with open(os.environ["GITHUB_OUTPUT"],"a") as output:
+                  print(f"version={version}",file=output)
+          PY
+
+      - name: Update permanent manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add module.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update TRG Prime Codex manifest to v${{ steps.build.outputs.version }}"
+            git push origin HEAD:main
+          fi
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v${{ steps.build.outputs.version }}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" trg-prime-codex.zip --clobber
+          else
+            gh release create "$tag" trg-prime-codex.zip --target main --title "TRG Prime Codex $tag" --notes "Foundry VTT V14 module for TRG Prime."
+          fi
